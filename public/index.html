@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TeamBoard · Realtime Task Tracker</title>
+  <meta name="description" content="A shared kanban board that updates live across every open tab.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Crect x='7' y='8' width='5' height='16' rx='2' fill='white'/%3E%3Crect x='14' y='8' width='5' height='11' rx='2' fill='white' opacity='.8'/%3E%3Crect x='21' y='8' width='5' height='7' rx='2' fill='white' opacity='.6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Login / register -->
+  <section id="auth" class="auth" hidden>
+    <div class="auth-brand">
+      <div class="logo logo-light"><span class="logo-mark"></span>TeamBoard</div>
+      <h1>Plan together.<br>See every change live.</h1>
+      <p>A shared kanban board for small teams. Move a card and everyone on the board sees it instantly.</p>
+      <div class="mini-board" aria-hidden="true">
+        <div class="mini-col"><span></span><i></i><i class="short"></i><i></i></div>
+        <div class="mini-col"><span></span><i class="hi"></i><i class="short"></i></div>
+        <div class="mini-col"><span></span><i></i><i class="short"></i><i></i></div>
+      </div>
+      <ul class="auth-points">
+        <li>Live updates with Socket.io</li>
+        <li>Drag and drop, or tap to move on mobile</li>
+        <li>Activity feed and online teammates</li>
+      </ul>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-card">
+        <div class="logo logo-mobile"><span class="logo-mark"></span>TeamBoard</div>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-mode="login" role="tab">Log in</button>
+          <button class="tab" data-mode="register" role="tab">Create account</button>
+        </div>
+        <form id="auth-form" novalidate>
+          <h2 id="auth-title">Welcome back</h2>
+          <p class="muted" id="auth-sub">Log in to open your team board.</p>
+          <label class="field" id="name-field" hidden>
+            <span>Full name</span>
+            <input name="name" autocomplete="name" placeholder="Your name">
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" placeholder="you@company.com" required>
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" required>
+          </label>
+          <p class="form-error" id="auth-error" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit" id="auth-submit">Log in</button>
+          <button class="btn btn-ghost btn-block" type="button" id="demo-btn">Use the demo account</button>
+          <p class="hint">Demo: <code>demo@example.com</code> / <code>demo1234</code></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Board -->
+  <section id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="logo"><span class="logo-mark"></span>TeamBoard</div>
+      <div class="board-title">
+        <strong>Team board</strong>
+        <span class="live-dot" id="conn-state" title="Live connection">Live</span>
+      </div>
+      <div class="topbar-right">
+        <div class="online" id="online" title="Online now">
+          <div class="avatars" id="online-avatars"></div>
+          <span id="online-count">0 online</span>
+        </div>
+        <button class="btn btn-primary" id="new-task-btn"><span class="plus">+</span><span class="label">New task</span></button>
+        <button class="icon-btn activity-toggle" id="activity-toggle" aria-label="Show activity">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="me">
+          <button class="avatar-btn" id="me-btn" aria-label="Account"></button>
+          <div class="me-menu" id="me-menu" hidden>
+            <div class="me-info"><strong id="me-name"></strong><span id="me-email"></span></div>
+            <button id="logout-btn">Log out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <nav class="col-tabs" id="col-tabs" aria-label="Columns"></nav>
+
+    <main class="layout">
+      <div class="board" id="board" data-active="todo"></div>
+      <aside class="activity" id="activity">
+        <div class="activity-head">
+          <h3>Activity</h3>
+          <button class="icon-btn activity-close" id="activity-close" aria-label="Close activity">&times;</button>
+        </div>
+        <ol class="feed" id="feed"></ol>
+      </aside>
+    </main>
+  </section>
+
+  <!-- Card menu (works on touch) -->
+  <div class="menu" id="card-menu" hidden></div>
+
+  <!-- Create / edit dialog -->
+  <div class="modal-backdrop" id="modal" hidden>
+    <form class="modal" id="task-form" novalidate>
+      <div class="modal-head">
+        <h2 id="modal-title">New task</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">&times;</button>
+      </div>
+      <label class="field"><span>Title</span><input name="title" maxlength="120" placeholder="What needs doing?" required></label>
+      <label class="field"><span>Description</span><textarea name="description" rows="3" maxlength="2000" placeholder="Add a few details (optional)"></textarea></label>
+      <div class="row">
+        <label class="field"><span>Priority</span>
+          <select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+        </label>
+        <label class="field"><span>Column</span>
+          <select name="status"><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select>
+        </label>
+      </div>
+      <label class="field"><span>Assignee</span><select name="assignee_id" id="assignee-select"></select></label>
+      <p class="form-error" id="task-error" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger-ghost" id="delete-task-btn" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="task-submit">Create task</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
